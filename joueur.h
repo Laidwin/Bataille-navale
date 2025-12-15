@@ -5,9 +5,14 @@
  * @date 01/12/2025
  * @version V0.4
  */
+#pragma once
+
 #include <vector>
 #include <tuple>
 #include <iostream>
+#include <string>
+#include <cstdlib>
+#include <conio.h>
 using namespace std;
 
 /**
@@ -31,6 +36,12 @@ using namespace std;
 #define SHIP_CHECK 7
 /**
  * @}
+*/
+/// Position de la coordonnée centrale de placement de bateau
+#define COORD_CENTER 8
+/// Position de la coordonnée possible de placement de bateau
+#define COORD_POSSIBLE 9
+/**
  * @}
 */
 
@@ -129,6 +140,7 @@ class Joueur {
          */
         Joueur(bool _isBot = true) : num_joueur(nb_joueurs++), isBot(_isBot), lost(false) {
             grille = vector<vector<unsigned short>>(DIMENSIONS, vector<unsigned short>(DIMENSIONS, EMPTY));
+            grille_check = vector<vector<unsigned short>>(DIMENSIONS, vector<unsigned short>(DIMENSIONS, EMPTY));
             if (_isBot) random_ships();
             else position_ships();
         }
@@ -159,7 +171,7 @@ class Joueur {
          * 
          * @param a valeur à affecter
          */
-        void operator=(unsigned short a) { grille = vector<vector<unsigned short>>(this->size(), vector<unsigned short>(this[0].size(), a)); }
+        void operator=(unsigned short a) { grille = vector<vector<unsigned short>>(this->size(), vector<unsigned short>(this[0].size(), a)); grille_check = vector<vector<unsigned short>>(this->size(), vector<unsigned short>(this[0].size(), a)); }
         /**
          * @brief Copie la grille du joueur 'a'
          * 
@@ -169,9 +181,12 @@ class Joueur {
             // if (a.size()!= this->grille.size() || a[0].size()!= this->grille[0].size())
             //     throw length_error("Les grilles ne font pas la même taille");
             grille = vector<vector<unsigned short>>(a.size(), vector<unsigned short>(a[0].size(), EMPTY));
-            for (int i=0; i<grille.size();i++)
-                for (int j=0; j<grille.size();j++)
-                    this->grille[i][j] = a(i,j);
+            grille_check = vector<vector<unsigned short>>(a.size(), vector<unsigned short>(a[0].size(), EMPTY));
+            for (int i=0; i< static_cast<int>(grille.size());i++)
+                for (int j=0; j< static_cast<int>(grille[0].size()); j++) {
+                    this->grille[i][j] = a(i, j);
+                    this->grille_check[i][j] = a.at_check(i, j);
+                }
         }
 
         /**
@@ -180,21 +195,25 @@ class Joueur {
          * @param ennemi joueur à attaquer
          */
         void play(Joueur& ennemi) {
-            display(grille);
-            display(grille_check);
+            // display(grille);
+            // display(grille_check);
+            afficherGrille(grille, true);
+            afficherGrille(grille_check, true);
             if (hasLost())
                 cout << num_joueur << " a perdu" << endl;
             else {
-                int y=-1,x;
-                string xs=0;
+                int y = -1;
+                int x = -1;
+                string xs;
                 if (!isBot) {
                     demande("Quelle ligne attaquer ?", y, 1, size());
-                    demande("Quelle colonne attaquer ?",xs,"A",colonne(this[0].size()));
+                    demande("Quelle colonne attaquer ?", xs, "A", colonne(this[0].size()));
+                    x = invColonne(xs);
                 } else {
                     do {
-                        y = rand()%size();
-                        x = rand()%this[0].size();
-                    } while(grille_check[y][x]!=EMPTY);
+                        y = rand() % size();
+                        x = rand() % this[0].size();
+                    } while (grille_check[y][x] != EMPTY);
                 }
                 if (ennemi.isTouched(y, x)) {
                     cout << num_joueur << (hasDrowned(y,x) ? " a coulé " : " a touché ")  << ennemi.num_joueur << " en " << x << y << endl;
@@ -214,7 +233,7 @@ class Joueur {
             cout << phrase << " [" << min << ";" << max << "]" << endl;
             do {
                 cin >> out;
-            } while(min <= out && out <= max);
+            } while (min > out || out > max);
         }
         /**
          * @brief Demande au joueur une lettre de colonne comprise entre 'min' et 'max'
@@ -228,26 +247,36 @@ class Joueur {
             cout << phrase << " [" << min << ";" << max << "]" << endl;
             do {
                 cin >> out;
-            } while(invColonne(min) <= invColonne(out) && invColonne(out) <= invColonne(max));
+            } while(invColonne(min) > invColonne(out) || invColonne(out) > invColonne(max));
         }
-
         /**
          * @brief Positionnement manuel des bateaux
          * 
          */
         void position_ships() {
             pair<int,int> coords;
-            vector<tuple<int,int,bool>> placements;
+            vector<vector<int>> placements;
             vector<pair<unsigned short,vector<vector<unsigned short>>>> bateaux = {{FORM_SHIP_CARRIER_NB,FORM_SHIP_CARRIER},{FORM_SHIP_BATTLESHIP_NB,FORM_SHIP_BATTLESHIP},{FORM_SHIP_CRUISER_NB,FORM_SHIP_CRUISER},{FORM_SHIP_DESTROYER_NB,FORM_SHIP_DESTROYER}};
-            for (int d=0; d<bateaux.size();d++)
-                for (int i = 0; i<bateaux[d].first;i++) {
-                    string x=0;
+            for (size_t d = 0; d < bateaux.size(); d++)
+                for (int i = 0; i < static_cast<int>(bateaux[d].first); i++) {
+                    string x;
                     int n;
-                    demande("Quelle ligne placer ?",coords.first,1,size());
-                    demande("Quelle colonne placer ?",x,"A",colonne(this[0].size())); coords.second = invColonne(x);
+                    // display(grille);
+                    afficherGrille(grille, true);
+                    do {
+                        demande("Quelle ligne placer ?", coords.first, 1, size());
+                        demande("Quelle colonne placer ?", x, "A", colonne(this[0].size())); coords.second = invColonne(x);
+                    } while (at(coords) != EMPTY); // system("cls");
                     placements = placementPossibles(coords.first-=1, coords.second-=1,bateaux[d].second.size(),bateaux[d].second[0].size());
+                    // display(grille);
+                    afficherGrille(grille, true);
                     demande("",n,1,placements.size());
+                    for (auto y : grille)
+                        for (auto x : y)
+                            if (x == COORD_CENTER || x == COORD_POSSIBLE)
+                                x = EMPTY;
                     placer(coords,placements[n-=1],bateaux[d].second);
+                    // system("cls");
                 }
         }
         /**
@@ -256,13 +285,24 @@ class Joueur {
          */
         void random_ships() {
             pair<int,int> coords;
-            vector<tuple<int,int,bool>> placements;
+            vector<vector<int>> placements;
             vector<pair<unsigned short,vector<vector<unsigned short>>>> bateaux = {{FORM_SHIP_CARRIER_NB,FORM_SHIP_CARRIER},{FORM_SHIP_BATTLESHIP_NB,FORM_SHIP_BATTLESHIP},{FORM_SHIP_CRUISER_NB,FORM_SHIP_CRUISER},{FORM_SHIP_DESTROYER_NB,FORM_SHIP_DESTROYER}};
-            for (int d=0; d<bateaux.size();d++)
+            for (int d=0; d< static_cast<int>(bateaux.size());d++)
                 for (int i = 0; i<bateaux[d].first;i++) {
-                    coords = {rand()%DIMENSIONS,rand()%DIMENSIONS};
-                    placements = placementPossibles(coords.first, coords.second,bateaux[d].second.size(),bateaux[d].second[0].size());
+                    // display(grille);
+                    afficherGrille(grille, true);
+                    do {
+                        coords = {rand()%DIMENSIONS,rand()%DIMENSIONS};
+                    } while (at(coords) != EMPTY);
+                    do {
+                        placements = placementPossibles(coords.first, coords.second, bateaux[d].second.size(), bateaux[d].second[0].size());
+					} while (placements.empty());
+                    
+                    display(grille, placements);
+                    // display(grille);
+                    afficherGrille(grille, true);
                     placer(coords,placements[rand()%placements.size()],bateaux[d].second);
+                    // system("cls");
                 }
         }
         /**
@@ -274,39 +314,48 @@ class Joueur {
          * @param width largeur du bateau
          * @return vector<tuple<int,int,bool>> paramètres permettant de déterminer quelle position est sélectionnée
          */
-        vector<tuple<int,int,bool>> placementPossibles(int y, int x, int height, int width) {
-            vector<tuple<int,int,bool>> rtr;
-            for (int o : {+1,-1})
-                for (int p : {+1,-1}) {
-                    bool possible = true;
-                    for (int i = 0; i<height && possible; i++)
-                        for (int j = 0; j<width && possible; j++)
-                            possible = at(y+i*o,x+j*p);
-                    if (possible) rtr.push_back({o,p,true});
-                }
-            for (int o : {+1,-1})
-                for (int p : {+1,-1}) {
-                    bool possible = true;
-                    for (int i = 0; i<height && possible; i++)
-                        for (int j = 0; j<width && possible; j++)
-                            possible = at(x+j*p,y+i*o);
-                    if (possible) rtr.push_back({p,o,false});
-                }
-            if (!isBot)
-                cout << "Quel numero de placement ? "; for (int i = 0;i<rtr.size();i++) cout << "(" << colonne(get<2>(rtr[i]) ? x*get<1>(rtr[i]) : y*get<0>(rtr[i])) << "," << (get<2>(rtr[i]) ? x*get<1>(rtr[i]) : y*get<0>(rtr[i])) <<"), ";
+        vector<vector<int>> placementPossibles(int y, int x, int height, int width) {
+            if (!isBot) at(y, x) = COORD_CENTER;
+            vector<vector<int>> rtr;
+            for (int n : {0,1})
+                for (int o : {+1,-1})
+                    for (int p : {+1,-1}) {
+                        bool possible = true;
+                        for (int i = 0; i < height && possible; i++)
+                            for (int j = 0; j < width && possible; j++) {
+                                int H = (int)grille.size();
+                                int W = (int)grille[0].size();
+
+                                int ay = y + ((n == 1) ? i * o : j * p);
+                                int ax = x + ((n == 0) ? i * o : j * p);
+
+                                possible = (0 <= ay && ay < H && 0 <= ax && ax < W);
+                                if (possible) possible = (at(ay, ax) == EMPTY);
+
+                            }
+                        if (possible) {
+                            rtr.push_back({ o,p,n });
+                            if (!isBot) at(((n == 1) ? (y + (height - 1) * o) : (y + (width - 1) * p)), ((n == 0) ? (x + (height - 1) * o) : (x + (width - 1) * p))) = COORD_POSSIBLE;
+                        }
+                    }
+            if (!isBot) {
+                cout << "Quel numero de placement ? ";
+                for (int i = 0; i < static_cast<int>(rtr.size()); i++)
+                    cout << colonne((rtr[i][2] == 1) ? x + (width - 1) * rtr[i][1] : x + (height - 1) * rtr[i][0]) << ((rtr[i][2] == 1) ? y + (height - 1) * rtr[i][1] : y + (width - 1) * rtr[i][0]) << (i < static_cast<int>(rtr.size()) ? ", " : "");
+            }
             return rtr;
         }
         /**
          * @brief Placement du bateau
          * 
          * @param coords Centre du bateau
-         * @param param Paramètres du placement possible
+         * @param param Paramètres du placement possible {direction horizontale, direction verticale, lecture horizontale ou verticale}
          * @param forme Forme du bateau à placer
          */
-        void placer(pair<int,int> coords, tuple<int,int,bool> param, vector<vector<unsigned short>> forme) {
-            for (int i = 0; i<forme.size(); i++)
-                for (int j = 0; j<forme[0].size(); j++)
-                    at((get<2>(param)?(coords.first+i*get<0>(param)):(coords.second+j*get<1>(param))),(get<2>(param)?(coords.second+j*get<1>(param)):(coords.first+i*get<0>(param)))) = (forme[i][j]==1 ? SHIP : EMPTY);
+        void placer(pair<int,int> coords, vector<int> param, vector<vector<unsigned short>> forme) {
+            for (int i = 0; i < static_cast<int>(forme.size()); i++)
+                for (int j = 0; j < static_cast<int>(forme[0].size()); j++)
+                    at(((param[2] == 1) ? (coords.first + i * param[0]) : (coords.first + j * param[1])), ((param[2] == 1) ? (coords.second + j * param[1]) : (coords.second + i * param[0]))) = (forme[i][j] == 1 ? SHIP : EMPTY);
         }
 
         /**
@@ -332,11 +381,11 @@ class Joueur {
          * @return false Le bateau n'a pas encore coulé
          */
         bool hasDrowned(int y, int x) {
-            bool rtr = !at(y,x)==SHIP;
-            if (rtr && y > 0) rtr = hasDrowned(y-1,x);
-            if (rtr && y < size()) rtr = hasDrowned(y+1,x);
-            if (rtr && x > 0) rtr = hasDrowned(y,x-1);
-            if (rtr && x < this[0].size()) rtr = hasDrowned(y,x+1);
+            bool rtr = !(at(y,x)==SHIP);
+            if (rtr && y > 0              && (at(y - 1, x) == SHIP || at(y - 1, x) == DROWNED_SHIP))      rtr = hasDrowned(y - 1, x);
+            if (rtr && y < size()         && (at(y + 1, x) == SHIP || at(y + 1, x) == DROWNED_SHIP))      rtr = hasDrowned(y+1,x);
+            if (rtr && x > 0              && (at(y, x - 1) == SHIP || at(y, x - 1) == DROWNED_SHIP))      rtr = hasDrowned(y, x - 1);
+            if (rtr && x < this[0].size() && (at(y, x + 1) == SHIP || at(y, x + 1) == DROWNED_SHIP))      rtr = hasDrowned(y,x+1);
             return rtr;
         }
         /**
@@ -349,7 +398,7 @@ class Joueur {
             if (!lost) {
                 short rtr = true;
                 for (int i = 0; i < size() && rtr; i++)
-                    for (int j = 0 ; j<this[0].size() && rtr;j++)
+                    for (int j = 0 ; j< static_cast<int>(this[0].size()) && rtr;j++)
                         rtr = at(i,j) == num_joueur;
                 lost = rtr == 0;
                 if (lost) nb_lost++;
@@ -364,8 +413,12 @@ class Joueur {
          * @param x colonne souhaitée
          * @return unsigned& Case renvoyée
          */
-        unsigned short& at(int y, int x) { return grille[y][x]; }
-       /**
+        unsigned short& at(int y, int x) {
+            if (y < 0 || y >= (int)grille.size() || x < 0 || x >= (int)grille[0].size())
+                throw out_of_range("at(): indices hors grille");
+            return grille[y][x]; 
+        }
+        /**
         * @brief Renvoie la case sélectionnée
         * 
         * @param p point souhaitée
@@ -373,11 +426,32 @@ class Joueur {
         */
         unsigned short& at(pair<int,int> p) { return grille[p.first][p.second]; }
         /**
+         * @brief Renvoie la case sélectionnée
+         *
+         * @param y ligne souhaitée
+         * @param x colonne souhaitée
+         * @return unsigned& Case renvoyée
+         */
+        unsigned short& at_check(int y, int x) { return grille_check[y][x]; }
+        /**
+        * @brief Renvoie la case sélectionnée
+        *
+        * @param p point souhaitée
+        * @return unsigned& Case renvoyée
+        */
+        unsigned short& at_check(pair<int, int> p) { return grille_check[p.first][p.second]; }
+        /**
          * @brief Renvoie le nombre de ligne de la grille de positionnement des bateaux
          * 
          * @return const int Taille de la grille
          */
         const int size() { return grille.size(); }
+        /**
+         * @brief Renvoie le nombre de ligne de la grille de positionnement des bateaux
+         *
+         * @return const int Taille de la grille
+         */
+        const int size_check() { return grille_check.size(); }
         /**
          * @brief Réinitialise les différentes variables dont les grilles du joueur
          * 
@@ -431,17 +505,17 @@ class Joueur {
          * @param yx État défini
          * @return string Caractère renvoyé
          */
-        string carac(unsigned short yx) {
+        string carac(unsigned short yx, vector<vector<int>> placements = {}) {
             string rtr;
             switch(yx) {
                 case EMPTY:
                     rtr = " ";
                     break;
                 case CHECK:
-                    rtr = "✓";
+                    rtr = "o";//"✓";
                     break;
                 case CROSS:
-                    rtr = "✗";
+                    rtr = "x";//"✗";
                     break;
                 case SHIP:
                     rtr = "■";
@@ -455,6 +529,12 @@ class Joueur {
                 case DROWNED_SHIP:
                     rtr = "☐";
                     break;
+                case COORD_CENTER:
+                    rtr = "o";
+                    break;
+                case COORD_POSSIBLE:
+                    rtr = "x";
+                    break;
             }
             return rtr;
         }
@@ -464,15 +544,99 @@ class Joueur {
          * 
          * @param g Grille à afficher
          */
-        void display(vector<vector<unsigned short>>& g) {
-            for (int j = 0; j < g[0].size(); j++) cout << (j<=0 ? "╔═══╦" : "") << "═══" << (j>=g[0].size() ? "╗\n" : "╤");
-            cout << "║" << (num_joueur >= 100 ? "" : " ") << num_joueur << (num_joueur >= 10 ? "" : " ") << "║"; for (int j = 0; j < g[0].size(); j++) cout << (colonne(j).size()>=3 ? "" : " ") << colonne(j) << (colonne(j).size()>=2 ? "" : " ") << (j>=g[0].size() ? "╗\n" : "╤");
-            for (int j = 0; j < g[0].size(); j++) cout << (j<=0 ? "╠═══╬" : "") << "═══" << (j>=g[0].size() ? "╣\n" : "╪");
-            for (int i = 0; i < g.size(); i++) {
-                cout << "║" << (g.size()>=100 ? "" : " ") << i+1 << (g.size()>=10 ? "" : " ") << "║"; for (int j = 0; j < g[0].size(); j++) cout << (carac(g[i][j]).size()>=3 ? "" : " ") << carac(g[i][j]) << (carac(g[i][j]).size()>=2 ? "" : " ") << (j>=g[0].size() ? "║\n" : "│");
-                for (int j = 0; j < g[0].size(); j++) cout << (j<=0 ? "╟───╫" : "") << "───" << (j>=g[0].size() ? "╢\n" : "┼");
+        void display(vector<vector<unsigned short>>& g, vector<vector<int>> placements = {}) {
+            int width = static_cast<int>(g[0].size());
+            int height = static_cast<int>(g.size());
+            for (int j = 0; j < width; j++) cout << (j<=0 ? "╔═══╦" : "") << "═══" << (j>= width ? "╗\n" : "╤");
+            cout << "║" << (num_joueur >= 100 ? "" : " ") << num_joueur << (num_joueur >= 10 ? "" : " ") << "║"; for (int j = 0; j < width; j++) cout << (colonne(j).size()>=3 ? "" : " ") << colonne(j) << (colonne(j).size()>=2 ? "" : " ") << (j>= width ? "╗\n" : "╤");
+            for (int j = 0; j < width; j++) cout << (j<=0 ? "╠═══╬" : "") << "═══" << (j>= width ? "╣\n" : "╪");
+            for (int i = 0; i < height; i++) {
+                cout << "║" << (height >=100 ? "" : " ") << i+1 << (height >=10 ? "" : " ") << "║"; for (int j = 0; j < width; j++) cout << (carac(g[i][j]).size()>=3 ? "" : " ") << carac(g[i][j]) << (carac(g[i][j], placements).size()>=2 ? "" : " ") << (j>= width ? "║\n" : "│");
+                for (int j = 0; j < width; j++) cout << (j<=0 ? "╟───╫" : "") << "───" << (j>= width ? "╢\n" : "┼");
             }
-            for (int j = 0; j < g[0].size(); j++) cout << (j<=0 ? "╚═══╩" : "") << "═══" << (j>=g[0].size() ? "╝\n" : "╧");
+            for (int j = 0; j < width; j++) cout << (j<=0 ? "╚═══╩" : "") << "═══" << (j>= width ? "╝\n" : "╧");
             cout << endl;
         }
+
+        static string colLabel(int c) { // 0->A, 1->B, ...
+            return string(1, char('A' + c));
+        }
+
+        // À adapter à tes codes internes (EMPTY, SHIP, HIT, MISS, etc.)
+        static string cellToStr(unsigned short v, bool revealShips) {
+            // Exemple : adapte aux valeurs de ton projet
+            const unsigned short EMPTY = 0;
+            const unsigned short SHIP = 1;
+            const unsigned short HIT = 2;
+            const unsigned short MISS = 3;
+
+            if (v == EMPTY) return " ";
+            if (v == SHIP)  return revealShips ? "■" : " ";
+            if (v == HIT)   return "X";
+            if (v == MISS)  return "•";
+            return "?";
+        }
+
+        void afficherGrille(const vector<vector<unsigned short>>& g, bool revealShips = true) {
+            const int H = (int)g.size();
+            const int W = H ? (int)g[0].size() : 0;
+            if (H == 0 || W == 0) return;
+
+            // ── Ligne du haut
+            cout << "╔═══╦";
+            for (int c = 0; c < W; ++c) {
+                cout << "═══";
+                cout << (c == W - 1 ? "╗" : "╤");
+            }
+            cout << "\n";
+
+            // ── En-tête colonnes
+            cout << "║   ║";
+            for (int c = 0; c < W; ++c) {
+                string lab = colLabel(c);
+                cout << " " << lab << " ";
+                cout << (c == W - 1 ? "║" : "│");
+            }
+            cout << "\n";
+
+            // ── Séparateur sous l’en-tête
+            cout << "╠═══╬";
+            for (int c = 0; c < W; ++c) {
+                cout << "═══";
+                cout << (c == W - 1 ? "╣" : "┼");
+            }
+            cout << "\n";
+
+            // ── Lignes
+            for (int r = 0; r < H; ++r) {
+                // Numéro de ligne (1..10) aligné sur 2 chars
+                if (r + 1 < 10) cout << "║ " << (r + 1) << " ║";
+                else            cout << "║" << (r + 1) << " ║";
+
+                for (int c = 0; c < W; ++c) {
+                    cout << " " << cellToStr(g[r][c], revealShips) << " ";
+                    cout << (c == W - 1 ? "║" : "│");
+                }
+                cout << "\n";
+
+                // Séparateur entre lignes
+                if (r != H - 1) {
+                    cout << "╟───╫";
+                    for (int c = 0; c < W; ++c) {
+                        cout << "───";
+                        cout << (c == W - 1 ? "╢" : "┼");
+                    }
+                    cout << "\n";
+                }
+            }
+
+            // ── Ligne du bas
+            cout << "╚═══╩";
+            for (int c = 0; c < W; ++c) {
+                cout << "═══";
+                cout << (c == W - 1 ? "╝" : "╧");
+            }
+            cout << "\n";
+        }
+
 };
